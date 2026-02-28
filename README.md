@@ -122,7 +122,7 @@ th{background:#eee;font-weight:600}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
-import { getDatabase, ref, set, get, child, onValue, remove } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBU5wgWTIgFetO38U28ikmoLC0CKryR05M",
@@ -133,58 +133,30 @@ const firebaseConfig = {
   appId: "1:725034061224:web:b2ac35e9e8f0f4c6e8a19d",
   measurementId: "G-TH2M7JWWHF"
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 </script>
 
 <script>
-/* ----------------- GLOBALS ----------------- */
-const role = document.getElementById("role");
-const adminPass = document.getElementById("adminPass");
-const user = document.getElementById("user");
-const pass = document.getElementById("pass");
-const login = document.getElementById("login");
-const main = document.getElementById("main");
-const qrAuthInterface = document.getElementById("qrAuthInterface");
-const studentAction = document.getElementById("studentAction");
+const role=document.getElementById("role");
+const adminPass=document.getElementById("adminPass");
+const user=document.getElementById("user");
+const pass=document.getElementById("pass");
+const login=document.getElementById("login");
+const main=document.getElementById("main");
+const qrAuthInterface=document.getElementById("qrAuthInterface");
+const studentAction=document.getElementById("studentAction");
 const tbody=document.getElementById("tbody");
 const subjectRow=document.getElementById("subjectRow");
 const weekSelect=document.getElementById("weekSelect");
-let roleType="", loggedStudent="", tardyMinutesData={}, html5QrCode;
+let roleType="",loggedStudent="",tardyMinutesData={},html5QrCode;
 
-/* ----------------- DATA ----------------- */
 const adminPassword="123456789";
 const subs=[["CHEM","07:30"],["DRRR","08:20"],["PE","09:30"],["INQ","10:20"],["MIL","13:00"],["PHYS","13:50"],["CAP","14:40"]];
-const users={
-"adiaton":"01","bacaycay":"02","broto":"03","caramol":"04","comedia":"05",
-"cuyag":"06","de la cruz":"07","delmoro":"08","delorino":"09","enano":"10",
-"esparto":"11","espinola":"12","etac":"13","florano":"14","herreras":"15",
-"jumadiao":"16","loberiano":"17","mangada":"18","paulino":"19","tan":"20",
-"velasco":"21","apelo":"22","arceo":"23","arniño":"24","balleta":"25",
-"barojabo":"26","bobiles":"27","caro":"28","cornico":"29","de rafael":"30",
-"escalante":"31","frigillana":"32","gallano":"33","gremio":"34","hipe":"35",
-"imperial":"36","irinco":"37","lee":"38","lim":"39","magdaraog":"40","mangada k":"41",
-"meregildo":"42","perez":"43","pulga":"44","ponferrada":"45",
-"santos":"46","sidro":"47","sister":"48","teberio":"49","vibar":"50"
-};
+const users={"adiaton":"01","bacaycay":"02","broto":"03","caramol":"04","comedia":"05","cuyag":"06","de la cruz":"07","delmoro":"08","delorino":"09","enano":"10","esparto":"11","espinola":"12","etac":"13","florano":"14","herreras":"15","jumadiao":"16","loberiano":"17","mangada":"18","paulino":"19","tan":"20","velasco":"21","apelo":"22","arceo":"23","arniño":"24","balleta":"25","barojabo":"26","bobiles":"27","caro":"28","cornico":"29","de rafael":"30","escalante":"31","frigillana":"32","gallano":"33","gremio":"34","hipe":"35","imperial":"36","irinco":"37","lee":"38","lim":"39","magdaraog":"40","mangada k":"41","meregildo":"42","perez":"43","pulga":"44","ponferrada":"45","santos":"46","sidro":"47","sister":"48","teberio":"49","vibar":"50"};
 const students=Object.keys(users).map(n=>n.toUpperCase());
-const studentQRCodes={};
-students.forEach((s,i)=> studentQRCodes[s] = "QR"+String(i+1).padStart(3,"0"));
+const studentQRCodes={}; students.forEach((s,i)=>studentQRCodes[s]="QR"+String(i+1).padStart(3,"0"));
 
-/* ----------------- WEEK UTILS ----------------- */
-function getWeekKey(d=new Date()){
-  let day = d.getDay();
-  let diff = d.getDate()-day+(day===0?-6:1);
-  let monday = new Date(d.setDate(diff));
-  let yyyy=monday.getFullYear();
-  let mm=String(monday.getMonth()+1).padStart(2,"0");
-  let dd=String(monday.getDate()).padStart(2,"0");
-  return `attendance_${yyyy}-${mm}-${dd}`;
-}
-document.getElementById("dateDisplay").innerText="Date: "+new Date().toDateString();
-
-/* ----------------- LOGIN ----------------- */
 role.onchange=()=>adminPass.style.display=role.value==="Student"?"none":"block";
 
 function loginUser(){
@@ -194,99 +166,52 @@ function loginUser(){
   if(roleType==="Student"){
     if(!users[u]||users[u]!==p) return alert("Invalid student login");
     loggedStudent=u.toUpperCase();
-    login.style.display="none";
-    qrAuthInterface.style.display="block";
+    login.style.display="none"; qrAuthInterface.style.display="block";
   } else {
     if(adminPass.value!==adminPassword) return alert("Invalid admin password");
     document.getElementById("adminReset").style.display="inline-block";
-    login.style.display="none";
-    main.style.display="block";
-    loadTable();
-    setInterval(updateClock,1000);
+    login.style.display="none"; main.style.display="block";
+    loadTable(); setInterval(updateClock,1000);
   }
 }
 
-/* ----------------- LOAD & SAVE TO FIREBASE ----------------- */
-async function saveDataFirebase(weekKey){
-  const data={attendance:tbody.innerHTML,tardy:tardyMinutesData};
-  await set(ref(db,weekKey),data);
-}
-
-async function loadDataFirebase(weekKey){
-  const snapshot=await get(ref(db,weekKey));
-  if(snapshot.exists()){
-    const data=snapshot.val();
-    tbody.innerHTML=data.attendance;
-    tardyMinutesData=data.tardy||{};
-    updateAllSummaries();
-  } else { loadTable(); }
-}
-
-/* ----------------- LOAD WEEK OPTIONS ----------------- */
-async function loadWeekOptions(){
-  weekSelect.innerHTML="";
-  const dbRef = ref(db);
-  const snapshot = await get(dbRef);
-  if(snapshot.exists()){
-    Object.keys(snapshot.val())
-      .filter(k=>k.startsWith("attendance_"))
-      .sort()
-      .forEach(weekKey=>{
-        const option=document.createElement("option");
-        option.value=weekKey;
-        option.textContent=weekKey.replace("attendance_","Week of ");
-        weekSelect.appendChild(option);
-      });
-  }
-  weekSelect.value=getWeekKey();
-  loadDataFirebase(weekSelect.value);
-}
-weekSelect.addEventListener("change",()=>loadDataFirebase(weekSelect.value));
-
-/* ----------------- TABLE & SUMMARY ----------------- */
-subjectRow.innerHTML="";
-for(let d=0; d<5; d++) subs.forEach(s=>{
-  subjectRow.innerHTML+=`<th>${s[0]}<div style="font-size:9px">${s[1]}</div></th>`;
-});
-
-function loadTable(){
-  tbody.innerHTML="";
-  students.forEach((s,i)=>{
-    const tr=document.createElement("tr");
-    tr.innerHTML=`<td class="sticky">${i+1}</td><td class="sticky name">${s}</td>`;
-    for(let d=0;d<35;d++){
-      const td=document.createElement("td");
-      if(roleType!=="Student") td.onclick=()=>{cycle(td,tr); saveDataFirebase(weekSelect.value);};
-      tr.appendChild(td);
+/* ----------------- QR Scanner ----------------- */
+function startQRScanner(){
+  const status=document.getElementById("qrStatus");
+  status.style.color="black"; status.textContent="Starting camera...";
+  html5QrCode=new Html5Qrcode("qrVideo");
+  Html5Qrcode.getCameras().then(devices=>{
+    if(devices && devices.length){
+      let cameraId=devices.find(d=>d.label.toLowerCase().includes("back"))?.id||devices[0].id;
+      html5QrCode.start(cameraId,{fps:10,qrbox:{width:250,height:250}},decodedText=>{
+        if(decodedText===studentQRCodes[loggedStudent]){
+          html5QrCode.stop().then(()=>{
+            status.style.color="green"; status.textContent="QR Verified! Loading attendance...";
+            setTimeout(()=>{ qrAuthInterface.style.display="none"; main.style.display="block"; studentAction.style.display="block"; loadTable(); setInterval(updateClock,1000); },500);
+          });
+        } else { status.style.color="red"; status.textContent="Invalid QR code"; }
+      },()=>{});
     }
-    const summary=document.createElement("td"); summary.className="summary-col"; tr.appendChild(summary);
-    tbody.appendChild(tr);
-  });
-  updateAllSummaries();
+  }).catch(err=>status.textContent="Camera not accessible");
 }
+function cancelQR(){ if(html5QrCode){ html5QrCode.stop().then(()=>{}).catch(()=>{}); } qrAuthInterface.style.display="none"; login.style.display="block"; }
 
-/* CYCLE MARKS & SUMMARY */
-function cycle(td,row){
-  const states=["","✔","T","C","A"];
-  let i=states.indexOf(td.textContent);
-  td.textContent=states[(i+1)%5];
-  td.className= td.textContent==="✔"?"P": td.textContent==="T"?"T": td.textContent==="C"?"C": td.textContent==="A"?"A":"";
-  updateRowSummary(row);
-}
-function updateRowSummary(row){
-  let present=0,tardy=0,cutting=0,absent=0;
-  for(let i=2;i<row.cells.length-1;i++){
-    let val=row.cells[i].textContent;
-    if(val==="✔") present++;
-    else if(val==="T") tardy++;
-    else if(val==="C") cutting++;
-    else if(val==="A") absent++;
-  }
-  let name=row.cells[1].textContent;
-  let mins=tardyMinutesData[name]||0;
-  row.cells[row.cells.length-1].innerHTML=`✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent}`;
-}
+/* ----------------- TABLE ----------------- */
+subjectRow.innerHTML=""; for(let d=0;d<5;d++) subs.forEach(s=>subjectRow.innerHTML+=`<th>${s[0]}<div style="font-size:9px">${s[1]}</div></th>`);
+function loadTable(){ tbody.innerHTML=""; students.forEach((s,i)=>{ const tr=document.createElement("tr"); tr.innerHTML=`<td class="sticky">${i+1}</td><td class="sticky name">${s}</td>`; for(let d=0;d<35;d++){ const td=document.createElement("td"); if(roleType!=="Student") td.onclick=()=>{cycle(td,tr); saveWeek();}; tr.appendChild(td); } const summary=document.createElement("td"); summary.className="summary-col"; tr.appendChild(summary); tbody.appendChild(tr); }); updateAllSummaries(); }
+
+/* ----------------- CYCLE & SUMMARY ----------------- */
+function cycle(td,row){ const states=["","✔","T","C","A"]; let i=states.indexOf(td.textContent); td.textContent=states[(i+1)%5]; td.className= td.textContent==="✔"?"P": td.textContent==="T"?"T": td.textContent==="C"?"C": td.textContent==="A"?"A":""; updateRowSummary(row); }
+function updateRowSummary(row){ let present=0,tardy=0,cutting=0,absent=0; for(let i=2;i<row.cells.length-1;i++){ let val=row.cells[i].textContent; if(val==="✔") present++; else if(val==="T") tardy++; else if(val==="C") cutting++; else if(val==="A") absent++; } let name=row.cells[1].textContent; let mins=tardyMinutesData[name]||0; row.cells[row.cells.length-1].innerHTML=`✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent}`; }
 function updateAllSummaries(){ [...tbody.rows].forEach(row=>updateRowSummary(row)); }
+
+/* ----------------- FIREBASE SAVE ----------------- */
+async function saveWeek(){ const weekKey=getWeekKey(); await set(ref(db,weekKey),{attendance:tbody.innerHTML,tardy:tardyMinutesData}); }
+
+/* ----------------- WEEK SELECT ----------------- */
+async function loadWeekOptions(){ weekSelect.innerHTML=""; const snapshot=await get(ref(db)); if(snapshot.exists()){ Object.keys(snapshot.val()).filter(k=>k.startsWith("attendance_")).sort().forEach(weekKey=>{ const option=document.createElement("option"); option.value=weekKey; option.textContent=weekKey.replace("attendance_","Week of "); weekSelect.appendChild(option); }); } weekSelect.value=getWeekKey(); loadWeek(weekSelect.value); }
+async function loadWeek(weekKey){ const snapshot=await get(ref(db,weekKey)); if(snapshot.exists()){ const data=snapshot.val(); tbody.innerHTML=data.attendance; tardyMinutesData=data.tardy||{}; updateAllSummaries(); } else loadTable(); }
+weekSelect.addEventListener("change",()=>loadWeek(weekSelect.value));
 
 /* ----------------- CLOCK ----------------- */
 function updateClock(){ document.getElementById("timeNow").textContent="Current Time: "+new Date().toLocaleTimeString(); }
