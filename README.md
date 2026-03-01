@@ -391,21 +391,20 @@ function markPresent(){
 
 /* ----------------- SUMMARY ----------------- */
 function updateRowSummary(row){
-  let present=0,tardy=0,cutting=0,absent=0;
+  let present=0, tardy=0, cutting=0, absent=0, excused=0; // include excused
   for(let i=2;i<row.cells.length-1;i++){
     let val=row.cells[i].textContent;
     if(val==="✔") present++;
     else if(val==="T") tardy++;
     else if(val==="C") cutting++;
     else if(val==="A") absent++;
-    else if(val === "E") excused++;
+    else if(val==="E") excused++;
   }
- let name=row.cells[1].textContent;
+  let name=row.cells[1].textContent;
   let mins=tardyMinutesData[name]||0;
   row.cells[row.cells.length-1].innerHTML=
     `✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent} | E ${excused}`;
 }
-function updateAllSummaries(){ [...tbody.rows].forEach(row=>updateRowSummary(row)); }
 
 /* ----------------- WEEKLY SELECT ----------------- */
 const weekSelect=document.getElementById("weekSelect");
