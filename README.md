@@ -14,6 +14,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
 import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 
+// ---------------- FIREBASE CONFIG ----------------
 const firebaseConfig = {
   apiKey: "AIzaSyBU5wgWTIgFetO38U28ikmoLC0CKryR05M",
   authDomain: "talaan-b5c66.firebaseapp.com",
@@ -27,31 +28,26 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-/* ----------------- WEEK KEY ----------------- */
-function getWeekKey(){
-  let now=new Date();
-  let day=now.getDay();
-  let diff=now.getDate()-day+(day===0?-6:1);
-  let monday=new Date(now.setDate(diff));
-  return "attendance_"+monday.toISOString().split("T")[0];
+// ---------------- WEEK KEY ----------------
+function getWeekKey() {
+  let now = new Date();
+  let day = now.getDay();
+  let diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday
+  let monday = new Date(now.setDate(diff));
+  return "attendance_" + monday.toISOString().split("T")[0];
 }
 
-/* ----------------- SAVE ----------------- */
-window.saveToDatabase = function(data, tardy){
-  set(ref(db, "attendance/"+getWeekKey()), {
-    table: data,
-    tardy: tardy
-  });
-};
+// ---------------- SAVE TO DATABASE ----------------
+function saveToDatabase(data, tardy){
+  set(ref(db, "attendance/"+getWeekKey()), { table: data, tardy: tardy });
+}
 
-/* ----------------- REALTIME LISTENER ----------------- */
-window.listenToDatabase = function(callback){
+// ---------------- LISTEN TO DATABASE ----------------
+function listenToDatabase(callback){
   onValue(ref(db, "attendance/"+getWeekKey()), (snapshot)=>{
-    if(snapshot.exists()){
-      callback(snapshot.val());
-    }
+    if(snapshot.exists()){ callback(snapshot.val()); }
   });
-};
+}
 </script>
 
 <style>
@@ -87,7 +83,7 @@ th{background:#eee;font-weight:600}
 .day-head{background:var(--maroon);color:white;border-right:4px solid black}
 .sticky{position:sticky;left:0;background:white;z-index:4;font-weight:600}
 .name{left:42px;z-index:5;background:white}
-.summary-col{background:#f7f7f7;min-width:180px;font-weight:600}
+.summary-col{background:#f7f7f7;min-width:160px;font-weight:600}
 .P{background:#c8f7c5;font-weight:600}
 .T{background:#fff3b0;font-weight:600}
 .C{background:#ffb3b3;font-weight:600}
@@ -140,7 +136,7 @@ th{background:#eee;font-weight:600}
   <button onclick="cancelQR()">Cancel</button>
 </div>
 
-<!-- MAIN ATTENDANCE -->
+<!-- MAIN -->
 <div id="main">
 <header>
   DAILY ATTENDANCE – GRADE 12 DIAMOND
@@ -185,84 +181,132 @@ th{background:#eee;font-weight:600}
 </div>
 </div>
 
-<script>
-/* ----------------- DATA ----------------- */
-const adminPassword="123456789";
+<script type="module">
+// ----------------- DATA -----------------
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+
 const subs=[["CHEM","07:30"],["DRRR","08:20"],["PE","09:30"],["INQ","10:20"],["MIL","13:00"],["PHYS","13:50"],["CAP","14:40"]];
+const adminPassword="123456789";
 const users={"adiaton":"01","bacaycay":"02","broto":"03","caramol":"04","comedia":"05","cuyag":"06","de la cruz":"07","delmoro":"08","delorino":"09","enano":"10","esparto":"11","espinola":"12","etac":"13","florano":"14","herreras":"15","jumadiao":"16","loberiano":"17","mangada":"18","paulino":"19","tan":"20","velasco":"21","apelo":"22","arceo":"23","arniño":"24","balleta":"25","barojabo":"26","bobiles":"27","caro":"28","cornico":"29","de rafael":"30","escalante":"31","frigillana":"32","gallano":"33","gremio":"34","hipe":"35","imperial":"36","irinco":"37","lee":"38","lim":"39","magdaraog":"40","mangada k":"41","meregildo":"42","perez":"43","pulga":"44","ponferrada":"45","santos":"46","sidro":"47","sister":"48","teberio":"49","vibar":"50"};
 const students=Object.keys(users).map(n=>n.toUpperCase());
 let roleType="", loggedStudent="", tardyMinutesData={}, html5QrCode;
 
-/* ----------------- QR CODES ----------------- */
+// ----------------- QR CODES -----------------
 const studentQRCodes={};
 students.forEach((s,i)=>studentQRCodes[s]="QR"+String(i+1).padStart(3,"0"));
 
-/* ----------------- SUBJECT ROW ----------------- */
-const subjectRow=document.getElementById("subjectRow");
-subjectRow.innerHTML="";
-for(let d=0;d<5;d++) subs.forEach(s=>subjectRow.innerHTML+=`<th>${s[0]}<div style="font-size:9px">${s[1]}</div></th>`);
+// ----------------- WEEK RANGE -----------------
+function getWeekRange(){
+  let now=new Date();
+  let day=now.getDay();
+  let diff=now.getDate()-day+(day===0?-6:1);
+  let monday=new Date(now.setDate(diff));
+  let friday=new Date(monday); friday.setDate(monday.getDate()+4);
+  let opt={month:"short",day:"numeric"};
+  return `${monday.toLocaleDateString("en-US",opt)} - ${friday.toLocaleDateString("en-US",opt)}, ${friday.getFullYear()}`;
+}
+document.getElementById("dateDisplay").innerText="Date: "+getWeekRange();
 
-/* ----------------- LOGIN ----------------- */
+// ----------------- LOGIN -----------------
 role.onchange=()=>adminPass.style.display=role.value==="Student"?"none":"block";
 
 function loginUser(){
   roleType=role.value;
   let u=user.value.toLowerCase().trim();
   let p=pass.value.trim();
+
   if(roleType==="Student"){
     if(!users[u]||users[u]!==p) return alert("Invalid student login");
-    loggedStudent=u.toUpperCase();
+    loggedStudent = u.toUpperCase();
     login.style.display="none"; qrAuthInterface.style.display="block";
   } else {
     if(adminPass.value!==adminPassword) return alert("Invalid admin password");
     adminReset.style.display="inline-block";
     login.style.display="none"; main.style.display="block";
-    loadTable(); setInterval(updateClock,1000); syncFirestore();
+    loadTable(); setInterval(updateClock,1000); syncDatabase();
   }
 }
 
-/* ----------------- CYCLE MARKS ----------------- */
+// ----------------- QR SCANNER -----------------
+function startQRScanner(){
+  const status = document.getElementById("qrStatus");
+  status.style.color="black";
+  status.textContent = "Accessing camera...";
+
+  if(html5QrCode){ html5QrCode.stop().catch(()=>{}); }
+
+  html5QrCode = new Html5Qrcode("qrVideo");
+  const config={ fps:10, qrbox:250 };
+
+  Html5Qrcode.getCameras().then(devices=>{
+    if(!devices||devices.length===0){ status.style.color="red"; status.textContent="No camera found!"; return; }
+    let cameraId = devices.find(d=>d.label.toLowerCase().includes("back"))?.id || devices[0].id;
+
+    html5QrCode.start(cameraId, config,
+      decodedText=>{
+        if(decodedText===studentQRCodes[loggedStudent]){
+          html5QrCode.stop().then(()=>{
+            status.style.color="green"; status.textContent="QR Verified! Loading attendance...";
+            setTimeout(()=>{
+              qrAuthInterface.style.display="none";
+              main.style.display="block";
+              studentAction.style.display="block";
+              loadTable();
+              setInterval(updateClock,1000);
+              syncDatabase();
+            },500);
+          });
+        } else { status.style.color="red"; status.textContent="Invalid QR code"; }
+      },
+      errorMessage=>{}
+    ).catch(err=>{ status.style.color="red"; status.textContent="Camera access denied or not available"; });
+  }).catch(err=>{ status.style.color="red"; status.textContent="Unable to access cameras"; });
+}
+function cancelQR(){ if(html5QrCode) html5QrCode.stop().catch(()=>{}); qrAuthInterface.style.display="none"; login.style.display="block"; }
+
+// ----------------- AUTO LOGOUT -----------------
+let logoutTimer;
+function resetLogoutTimer(){ clearTimeout(logoutTimer); logoutTimer=setTimeout(()=>{ alert("Session expired."); location.reload(); },600000); }
+document.addEventListener("click",resetLogoutTimer); document.addEventListener("keypress",resetLogoutTimer);
+
+// ----------------- TABLE -----------------
+const tbody=document.getElementById("tbody");
+const subjectRow=document.getElementById("subjectRow");
+subjectRow.innerHTML="";
+for(let d=0;d<5;d++) subs.forEach(s=>subjectRow.innerHTML+=`<th>${s[0]}<div style="font-size:9px">${s[1]}</div></th>`);
+
+function loadTable(){
+  tbody.innerHTML="";
+  students.forEach((s,i)=>{
+    let tr=document.createElement("tr");
+    tr.innerHTML=`<td class="sticky">${i+1}</td><td class="sticky name">${s}</td>`;
+    for(let d=0;d<35;d++){
+      let td=document.createElement("td");
+      if(roleType!=="Student") td.onclick=()=>{ cycle(td,tr); saveToFirestore(); };
+      tr.appendChild(td);
+    }
+    let summary=document.createElement("td"); summary.className="summary-col"; tr.appendChild(summary);
+    tbody.appendChild(tr);
+  });
+  updateAllSummaries();
+}
+
+// ----------------- CYCLE MARKS -----------------
 function cycle(td,row){
-  const states=["","✔","T","C","A","E"]; // Added E = Excused
+  const states=["","✔","T","C","A","E"];
   let i=states.indexOf(td.textContent);
   td.textContent=states[(i+1)%states.length];
-  td.className=
-    td.textContent==="✔"?"P":
-    td.textContent==="T"?"T":
-    td.textContent==="C"?"C":
-    td.textContent==="A"?"A":
-    td.textContent==="E"?"E":"";
+  td.className= td.textContent==="✔"?"P": td.textContent==="T"?"T": td.textContent==="C"?"C": td.textContent==="A"?"A": td.textContent==="E"?"E":"";
   updateRowSummary(row);
+  saveToFirestore();
 }
 
-/* ----------------- SUMMARY ----------------- */
-function updateRowSummary(row){
-  let present=0, tardy=0, cutting=0, absent=0, excused=0;
-  for(let i=2;i<row.cells.length-1;i++){
-    let val=row.cells[i].textContent;
-    if(val==="✔") present++;
-    else if(val==="T") tardy++;
-    else if(val==="C") cutting++;
-    else if(val==="A") absent++;
-    else if(val==="E") excused++;
-  }
-  let name=row.cells[1].textContent;
-  let mins=tardyMinutesData[name]||0;
-  row.cells[row.cells.length-1].innerHTML=
-    `✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent} | E ${excused}`;
-}
-function updateAllSummaries(){ [...tbody.rows].forEach(row=>updateRowSummary(row)); }
-
-/* ----------------- MARK PRESENT (STUDENT) ----------------- */
+// ----------------- MARK PRESENT -----------------
 function markPresent(){
   let now=new Date();
   let minutes=now.getHours()*60+now.getMinutes();
   let subjectIndex=-1;
-  subs.forEach((s,i)=>{
-    let [h,m]=s[1].split(":");
-    let start=parseInt(h)*60+parseInt(m);
-    if(minutes>=start && minutes<=start+60) subjectIndex=i;
-  });
+  subs.forEach((s,i)=>{ let [h,m]=s[1].split(":"); let start=parseInt(h)*60+parseInt(m); if(minutes>=start && minutes<=start+60) subjectIndex=i; });
   if(subjectIndex<0) return alert("Not within class time");
 
   let dayIndex=now.getDay()-1;
@@ -273,48 +317,89 @@ function markPresent(){
   let td=row.cells[col];
   if(td.textContent!=="") return alert("Already marked");
 
-  let [h,m]=subs[subjectIndex][1].split(":");
-  let start=parseInt(h)*60+parseInt(m);
-  let diff=minutes-start;
+  let [h,m]=subs[subjectIndex][1].split(":"); let start=parseInt(h)*60+parseInt(m); let diff=minutes-start;
 
   if(diff<=5){ td.textContent="✔"; td.className="P"; }
   else if(diff<=60){ td.textContent="T"; td.className="T"; if(!tardyMinutesData[loggedStudent]) tardyMinutesData[loggedStudent]=0; tardyMinutesData[loggedStudent]+=diff; }
   else{ td.textContent="C"; td.className="C"; }
 
+  autoPresentBetween(subjectIndex, dayIndex, row); // automatic present/cutting logic
   updateRowSummary(row);
   saveToFirestore();
 }
 
-/* ----------------- FIRESTORE SAVE & SYNC ----------------- */
-function saveToFirestore(){
-  let data=[];
-  [...tbody.rows].forEach(row=>{
-    let rowData=[];
-    for(let i=2;i<row.cells.length-1;i++) rowData.push(row.cells[i].textContent);
-    data.push(rowData);
-  });
-  saveToDatabase(data, tardyMinutesData);
+// ----------------- AUTO PRESENT / CUTTING BETWEEN LOG IN & LOG OUT -----------------
+function autoPresentBetween(subjectIndex, dayIndex, row){
+  let first=subjectIndex;
+  let last=subjectIndex; // default only current subject
+
+  // morning
+  if(subjectIndex<=3){ last=3; for(let i=first+1;i<=last;i++){ let td=row.cells[2+(dayIndex*7)+i]; if(td.textContent==="") td.textContent="✔"; td.className="P"; } }
+  // afternoon
+  else if(subjectIndex>=4){ last=6; for(let i=first+1;i<=last;i++){ let td=row.cells[2+(dayIndex*7)+i]; if(td.textContent==="") td.textContent="✔"; td.className="P"; } }
 }
 
-function syncFirestore(){
-  listenToDatabase((data)=>{
-    if(!data) return;
-    let table=data.table||[];
-    tardyMinutesData=data.tardy||{};
-    [...tbody.rows].forEach((row,r)=>{
-      if(!table[r]) return;
-      table[r].forEach((cell,c)=>{
-        let td=row.cells[c+2];
-        td.textContent=cell;
-        td.className=
-          cell==="✔"?"P":
-          cell==="T"?"T":
-          cell==="C"?"C":
-          cell==="A"?"A":
-          cell==="E"?"E":"";
-      });
-    });
-    updateAllSummaries();
+// ----------------- SUMMARY -----------------
+function updateRowSummary(row){
+  let present=0,tardy=0,cutting=0,absent=0,excused=0;
+  for(let i=2;i<row.cells.length-1;i++){
+    let val=row.cells[i].textContent;
+    if(val==="✔") present++;
+    else if(val==="T") tardy++;
+    else if(val==="C") cutting++;
+    else if(val==="A") absent++;
+    else if(val==="E") excused++;
+  }
+  let name=row.cells[1].textContent;
+  let mins=tardyMinutesData[name]||0;
+  row.cells[row.cells.length-1].innerHTML=`✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent} | E ${excused}`;
+}
+
+// ----------------- SAVE & LOAD -----------------
+function saveToFirestore(){ 
+  saveData(); 
+  saveToDatabase(tbody.innerHTML, tardyMinutesData); 
+}
+function loadSavedData(){
+  let saved=localStorage.getItem(getWeekKey());
+  if(saved){ tbody.innerHTML=saved; tardyMinutesData=JSON.parse(localStorage.getItem(getWeekKey()+"_tardy"))||{}; updateAllSummaries(); }
+}
+function updateAllSummaries(){ [...tbody.rows].forEach(r=>updateRowSummary(r)); }
+function saveData(){ localStorage.setItem(getWeekKey(),tbody.innerHTML); localStorage.setItem(getWeekKey()+"_tardy",JSON.stringify(tardyMinutesData)); }
+
+// ----------------- WEEKLY RESET -----------------
+function manualReset(){ if(confirm("Reset attendance for this week?")){ localStorage.removeItem(getWeekKey()); localStorage.removeItem(getWeekKey()+"_tardy"); location.reload(); } }
+function checkWeeklyReset(){ const lastReset=localStorage.getItem("lastReset")||0; const now=Date.now(); if(now-lastReset>7*24*60*60*1000){ localStorage.removeItem(getWeekKey()); localStorage.setItem("lastReset",now); } }
+checkWeeklyReset();
+
+// ----------------- SEARCH -----------------
+document.addEventListener("input",function(e){ if(e.target.id==="searchInput"){ let val=e.target.value.toLowerCase(); [...tbody.rows].forEach(r=>{ r.style.display=r.cells[1].textContent.toLowerCase().includes(val)?"":"none"; }); } });
+
+// ----------------- CLOCK -----------------
+function updateClock(){ timeNow.textContent="Current Time: "+new Date().toLocaleTimeString(); }
+setInterval(updateClock,1000);
+
+// ----------------- WEEK SELECT -----------------
+const weekSelect=document.getElementById("weekSelect");
+function loadWeekOptions(){
+  weekSelect.innerHTML="";
+  Object.keys(localStorage).filter(k=>k.startsWith("attendance_")&&!k.endsWith("_tardy")).sort().forEach(k=>{
+    const opt=document.createElement("option"); opt.value=k; opt.textContent=k.replace("attendance_","Week of "); weekSelect.appendChild(opt);
+  });
+  weekSelect.value=getWeekKey(); loadWeekData(weekSelect.value);
+}
+function loadWeekData(key){ 
+  let saved=localStorage.getItem(key);
+  if(saved){ tbody.innerHTML=saved; tardyMinutesData=JSON.parse(localStorage.getItem(key+"_tardy"))||{}; updateAllSummaries(); } 
+  else{ loadTable(); }
+}
+weekSelect.addEventListener("change",()=>loadWeekData(weekSelect.value));
+loadWeekOptions();
+
+// ----------------- SYNC DATABASE -----------------
+function syncDatabase(){
+  listenToDatabase(data=>{
+    if(data?.table){ tbody.innerHTML=data.table; tardyMinutesData=data.tardy||{}; updateAllSummaries(); saveData(); }
   });
 }
 </script>
