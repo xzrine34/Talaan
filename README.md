@@ -11,8 +11,8 @@
 
   <!-- Firebase v12 -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
-    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+   import { getDatabase, ref, set, onValue } 
+from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBU5wgWTIgFetO38U28ikmoLC0CKryR05M",
@@ -35,14 +35,7 @@
       let monday = new Date(now.setDate(diff));
       return "attendance_" + monday.toISOString().split("T")[0];
     }
-
-    /* ----------------- SAVE ----------------- */
-    window.saveToDatabase = function(data, tardy) {
-      set(ref(db, "attendance/" + getWeekKey()), {
-        table: data,
-        tardy: tardy
-      });
-    };
+    ;
 
     /* ----------------- REALTIME LISTENER ----------------- */
     window.listenToDatabase = function(callback) {
@@ -426,7 +419,16 @@ function loadTable() {
     tr.innerHTML = `<td class="sticky">${i + 1}</td><td class="sticky name">${s}</td>`;
     for (let d = 0; d < 35; d++) {
       let td = document.createElement("td");
-      if (roleType !== "Student") td.onclick = () => { cycle(td, tr); saveToFirestore(); };
+      if (roleType !== "Student") td.onclick = () => { 
+  cycle(td, tr); 
+  saveStudentData(
+    tr.cells[1].textContent,
+    [...tr.cells]
+      .slice(2, tr.cells.length - 1)
+      .map(c => c.textContent)
+  );
+};
+
       tr.appendChild(td);
     }
     let summary = document.createElement("td");
@@ -495,7 +497,12 @@ function markPresent() {
   } else { td.textContent = "C"; td.className = "C"; }
 
   updateRowSummary(row);
-  saveToFirestore();
+  saveStudentData(
+  loggedStudent,
+  [...row.cells]
+    .slice(2, row.cells.length - 1)
+    .map(c => c.textContent)
+);
 }
 
 /* ----------------- SUMMARY ----------------- */
@@ -511,7 +518,7 @@ function updateRowSummary(row) {
   }
   let name = row.cells[1].textContent;
   let mins = tardyMinutesData[name] || 0;
-  row.cells[row.cells.length - 1].innerHTML = `✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent}`;
+  row.cells[row.cells.length - 1].innerHTML = `✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent} | E ${excused}`;
 }
 
 function updateAllSummaries() { [...tbody.rows].forEach(row => updateRowSummary(row)); }
@@ -523,15 +530,18 @@ function updateClock() {
 }
 
 /* ----------------- FIRESTORE SAVE & SYNC ----------------- */
-/* ----------------- FIREBASE SAVE & SYNC (MULTI-DEVICE FRIENDLY) ----------------- */
 
-// Save only one student's row to Firebase
 function saveStudentData(studentName, rowData) {
-  const weekRef = ref(db, "attendance/" + getWeekKey());
-  update(weekRef, {
-    ["table/" + students.indexOf(studentName)]: rowData,
-    ["tardy/" + studentName]: tardyMinutesData[studentName] || 0
-  });
+  const studentIndex = students.indexOf(studentName);
+
+  const studentRef = ref(db, 
+    "attendance/" + getWeekKey() + "/table/" + studentIndex);
+
+  const tardyRef = ref(db, 
+    "attendance/" + getWeekKey() + "/tardy/" + studentName);
+
+  set(studentRef, rowData);
+  set(tardyRef, tardyMinutesData[studentName] || 0);
 }
 
 // Save the currently edited table (for admin/teacher full edits)
