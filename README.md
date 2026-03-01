@@ -9,7 +9,7 @@
 <!-- QR Scanner library -->
 <script src="https://unpkg.com/html5-qrcode"></script>
 
-<!-- Firebase v12 -->
+<!-- Firebase -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
 import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
@@ -27,26 +27,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-/* ----------------- WEEK KEY ----------------- */
-function getWeekKey(){
-  let now=new Date();
-  let day=now.getDay();
-  let diff=now.getDate()-day+(day===0?-6:1);
-  let monday=new Date(now.setDate(diff));
-  return "attendance_"+monday.toISOString().split("T")[0];
-}
-
-/* ----------------- SAVE ----------------- */
 window.saveToDatabase = function(data, tardy){
-  set(ref(db, "attendance/"+getWeekKey()), {
-    table: data,
-    tardy: tardy
-  });
+  set(ref(db, "attendance/"+getWeekKey()), { table: data, tardy: tardy });
 };
 
-/* ----------------- REALTIME LISTENER ----------------- */
 window.listenToDatabase = function(callback){
-  onValue(ref(db, "attendance/"+getWeekKey()), (snapshot)=>{
+  onValue(ref(db, "attendance/"+getWeekKey()), snapshot=>{
     if(snapshot.exists()){
       callback(snapshot.val());
     }
@@ -88,11 +74,13 @@ th{background:#eee;font-weight:600}
 .sticky{position:sticky;left:0;background:white;z-index:4;font-weight:600}
 .name{left:42px;z-index:5;background:white}
 .summary-col{background:#f7f7f7;min-width:160px;font-weight:600}
+
+/* MARK COLORS */
 .P{background:#c8f7c5;font-weight:600}
 .T{background:#fff3b0;font-weight:600}
 .C{background:#ffb3b3;font-weight:600}
 .A{background:#e0e0e0;font-weight:600}
-.E{background:#b3d9ff;font-weight:600}
+.E{background:#a0c4ff;font-weight:600} /* Excused */
 
 /* QR Interface */
 #qrAuthInterface{display:none;padding:20px;text-align:center}
@@ -186,24 +174,37 @@ th{background:#eee;font-weight:600}
 </div>
 
 <script>
-// ----------------- DATA -----------------
+/* ----------------- DATA ----------------- */
 const adminPassword="123456789";
 const subs=[["CHEM","07:30"],["DRRR","08:20"],["PE","09:30"],["INQ","10:20"],["MIL","13:00"],["PHYS","13:50"],["CAP","14:40"]];
 const users={"adiaton":"01","bacaycay":"02","broto":"03","caramol":"04","comedia":"05","cuyag":"06","de la cruz":"07","delmoro":"08","delorino":"09","enano":"10","esparto":"11","espinola":"12","etac":"13","florano":"14","herreras":"15","jumadiao":"16","loberiano":"17","mangada":"18","paulino":"19","tan":"20","velasco":"21","apelo":"22","arceo":"23","arniño":"24","balleta":"25","barojabo":"26","bobiles":"27","caro":"28","cornico":"29","de rafael":"30","escalante":"31","frigillana":"32","gallano":"33","gremio":"34","hipe":"35","imperial":"36","irinco":"37","lee":"38","lim":"39","magdaraog":"40","mangada k":"41","meregildo":"42","perez":"43","pulga":"44","ponferrada":"45","santos":"46","sidro":"47","sister":"48","teberio":"49","vibar":"50"};
 const students=Object.keys(users).map(n=>n.toUpperCase());
 let roleType="", loggedStudent="", tardyMinutesData={}, html5QrCode;
 
-// ----------------- QR CODES -----------------
+/* ----------------- QR CODES ----------------- */
 const studentQRCodes={};
 students.forEach((s,i)=>studentQRCodes[s]="QR"+String(i+1).padStart(3,"0"));
 
-// ----------------- SUBJECT ROW -----------------
+/* ----------------- WEEK RANGE ----------------- */
+function getWeekRange(){
+  let now=new Date();
+  let day=now.getDay();
+  let diff=now.getDate()-day+(day===0?-6:1);
+  let monday=new Date(now.setDate(diff));
+  let friday=new Date(monday); friday.setDate(monday.getDate()+4);
+  let opt={month:"short",day:"numeric"};
+  return `${monday.toLocaleDateString("en-US",opt)} - ${friday.toLocaleDateString("en-US",opt)}, ${friday.getFullYear()}`;
+}
+document.getElementById("dateDisplay").innerText="Date: "+getWeekRange();
+
+/* ----------------- SUBJECT ROW ----------------- */
 const subjectRow=document.getElementById("subjectRow");
 subjectRow.innerHTML="";
 for(let d=0;d<5;d++) subs.forEach(s=>subjectRow.innerHTML=`<th>${s[0]}<div style="font-size:9px">${s[1]}</div></th>`);
 
-// ----------------- LOGIN -----------------
+/* ----------------- LOGIN ----------------- */
 role.onchange=()=>adminPass.style.display=role.value==="Student"?"none":"block";
+
 function loginUser(){
   roleType=role.value;
   let u=user.value.toLowerCase().trim();
@@ -220,18 +221,16 @@ function loginUser(){
   }
 }
 
-// ----------------- QR SCANNER -----------------
+/* ----------------- QR SCANNER ----------------- */
 function startQRScanner(){
-  const status=document.getElementById("qrStatus");
-  status.style.color="black"; status.textContent="Accessing camera...";
-  if(html5QrCode){html5QrCode.stop().then(()=>{}).catch(()=>{});}
-  html5QrCode=new Html5Qrcode("qrVideo");
-  const config={fps:10, qrbox:250};
-
+  const status = document.getElementById("qrStatus");
+  status.style.color = "black"; status.textContent = "Accessing camera...";
+  if(html5QrCode){ html5QrCode.stop().then(()=>{}).catch(()=>{}); }
+  html5QrCode = new Html5Qrcode("qrVideo");
+  const config = { fps: 10, qrbox: 250 };
   Html5Qrcode.getCameras().then(devices=>{
-    if(!devices || devices.length===0){status.style.color="red"; status.textContent="No camera found!"; return;}
+    if(!devices || devices.length===0){ status.style.color="red"; status.textContent="No camera found!"; return; }
     let cameraId = devices.find(d=>d.label.toLowerCase().includes("back"))?.id || devices[0].id;
-
     html5QrCode.start(cameraId, config,
       decodedText=>{
         if(decodedText===studentQRCodes[loggedStudent]){
@@ -249,23 +248,22 @@ function startQRScanner(){
           });
         } else { status.style.color="red"; status.textContent="Invalid QR code"; }
       },
-      ()=>{}
-    ).catch(err=>{status.style.color="red"; status.textContent="Camera access denied";});
+      err=>{}
+    ).catch(err=>{status.style.color="red"; status.textContent="Camera access denied or not available";});
   }).catch(err=>{status.style.color="red"; status.textContent="Unable to access cameras";});
 }
-const observer=new MutationObserver(mutations=>{
-  mutations.forEach(m=>{ if(m.target.style.display==="block") startQRScanner(); });
-});
-observer.observe(document.getElementById("qrAuthInterface"), { attributes:true, attributeFilter:["style"] });
-function cancelQR(){ if(html5QrCode){html5QrCode.stop().then(()=>{}).catch(()=>{});} qrAuthInterface.style.display="none"; login.style.display="block"; }
 
-// ----------------- AUTO LOGOUT -----------------
+function cancelQR(){ if(html5QrCode){ html5QrCode.stop().then(()=>{}).catch(()=>{}); } qrAuthInterface.style.display="none"; login.style.display="block"; }
+
+/* ----------------- AUTO LOGOUT ----------------- */
 let logoutTimer;
-function resetLogoutTimer(){ clearTimeout(logoutTimer); logoutTimer=setTimeout(()=>{ alert("Session expired."); location.reload(); },600000);}
+function resetLogoutTimer(){ clearTimeout(logoutTimer); logoutTimer=setTimeout(()=>{ alert("Session expired."); location.reload(); },600000); }
 document.addEventListener("click",resetLogoutTimer); document.addEventListener("keypress",resetLogoutTimer);
 
-// ----------------- TABLE -----------------
+/* ----------------- TABLE FUNCTIONS ----------------- */
 const tbody=document.getElementById("tbody");
+
+  /* ----------------- LOAD TABLE ----------------- */
 function loadTable(){
   tbody.innerHTML="";
   students.forEach((s,i)=>{
@@ -273,49 +271,76 @@ function loadTable(){
     tr.innerHTML=`<td class="sticky">${i+1}</td><td class="sticky name">${s}</td>`;
     for(let d=0;d<35;d++){
       let td=document.createElement("td");
-      if(roleType!=="Student") td.onclick=()=>{cycle(td,tr); saveToFirestore();};
+      if(roleType!=="Student"){
+        td.onclick=()=>{ cycle(td,tr); saveToFirestore(); updateRowSummary(tr); };
+      }
       tr.appendChild(td);
     }
-    let summary=document.createElement("td"); summary.className="summary-col"; tr.appendChild(summary);
+    let summary=document.createElement("td");
+    summary.className="summary-col";
+    tr.appendChild(summary);
     tbody.appendChild(tr);
   });
   updateAllSummaries();
 }
 
-// ----------------- CYCLE MARKS (✔,T,C,A,E) -----------------
+/* ----------------- SEARCH ----------------- */
+document.getElementById("searchInput").addEventListener("input",e=>{
+  let val=e.target.value.toLowerCase();
+  [...tbody.rows].forEach(row=>{
+    let name=row.cells[1].textContent.toLowerCase();
+    row.style.display=name.includes(val)?"":"none";
+  });
+});
+
+/* ----------------- CYCLE MARKS ----------------- */
 function cycle(td,row){
-  const states=["","✔","T","C","A","E"];
+  const states=["","✔","T","C","A","E"]; // E = Excused
   let i=states.indexOf(td.textContent);
-  td.textContent=states[(i+1)%6];
-  td.className= td.textContent==="✔"?"P": td.textContent==="T"?"T": td.textContent==="C"?"C": td.textContent==="A"?"A": td.textContent==="E"?"E":"";
-  updateRowSummary(row);
+  td.textContent=states[(i+1)%states.length];
+  td.className=
+    td.textContent==="✔"?"P":
+    td.textContent==="T"?"T":
+    td.textContent==="C"?"C":
+    td.textContent==="A"?"A":
+    td.textContent==="E"?"E":"";
 }
 
-// ----------------- MARK PRESENT -----------------
+/* ----------------- MARK PRESENT (STUDENT) ----------------- */
 function markPresent(){
   let now=new Date();
   let minutes=now.getHours()*60+now.getMinutes();
   let subjectIndex=-1;
   subs.forEach((s,i)=>{
-    let [h,m]=s[1].split(":"); let start=parseInt(h)*60+parseInt(m);
+    let [h,m]=s[1].split(":");
+    let start=parseInt(h)*60+parseInt(m);
     if(minutes>=start && minutes<=start+60) subjectIndex=i;
   });
   if(subjectIndex<0) return alert("Not within class time");
-  let dayIndex=now.getDay()-1; if(dayIndex<0||dayIndex>4) return alert("Not school day");
+
+  let dayIndex=now.getDay()-1;
+  if(dayIndex<0||dayIndex>4) return alert("Not school day");
+
   let row=[...tbody.rows].find(r=>r.cells[1].textContent===loggedStudent);
-  let col=2+subjectIndex+(dayIndex*7); let td=row.cells[col];
+  let col=2+subjectIndex+(dayIndex*7);
+  let td=row.cells[col];
   if(td.textContent!=="") return alert("Already marked");
-  let [h,m]=subs[subjectIndex][1].split(":"); let start=parseInt(h)*60+parseInt(m);
+
+  let [h,m]=subs[subjectIndex][1].split(":");
+  let start=parseInt(h)*60+parseInt(m);
   let diff=minutes-start;
+
   if(diff<=5){ td.textContent="✔"; td.className="P"; }
   else if(diff<=60){ td.textContent="T"; td.className="T"; if(!tardyMinutesData[loggedStudent]) tardyMinutesData[loggedStudent]=0; tardyMinutesData[loggedStudent]+=diff; }
   else{ td.textContent="C"; td.className="C"; }
-  updateRowSummary(row); saveToFirestore();
+
+  saveToFirestore();
+  updateRowSummary(row);
 }
 
-// ----------------- SUMMARY -----------------
+/* ----------------- SUMMARY ----------------- */
 function updateRowSummary(row){
-  let present=0,tardy=0,cutting=0,absent=0,excused=0;
+  let present=0, tardy=0, cutting=0, absent=0, excused=0;
   for(let i=2;i<row.cells.length-1;i++){
     let val=row.cells[i].textContent;
     if(val==="✔") present++;
@@ -324,23 +349,24 @@ function updateRowSummary(row){
     else if(val==="A") absent++;
     else if(val==="E") excused++;
   }
-  let name=row.cells[1].textContent; let mins=tardyMinutesData[name]||0;
-  row.cells[row.cells.length-1].innerHTML=`✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent} | E ${excused}`;
+  let name=row.cells[1].textContent;
+  let mins=tardyMinutesData[name]||0;
+  row.cells[row.cells.length-1].innerHTML=
+    `✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent} | E ${excused}`;
 }
+
 function updateAllSummaries(){ [...tbody.rows].forEach(row=>updateRowSummary(row)); }
 
-// ----------------- WEEKLY SELECTION -----------------
-const weekSelect=document.getElementById("weekSelect");
-function loadWeekOptions(){ weekSelect.innerHTML=""; Object.keys(localStorage).filter(k=>k.startsWith("attendance_")&&!k.includes("backup")).forEach(k=>{let opt=document.createElement("option"); opt.value=k; opt.text=k.replace("attendance_",""); weekSelect.appendChild(opt);}); }
-weekSelect.onchange=()=>syncFirestore();
+/* ----------------- WEEK KEY ----------------- */
+function getWeekKey(){
+  let now=new Date();
+  let day=now.getDay();
+  let diff=now.getDate()-day+(day===0?-6:1); // Monday
+  let monday=new Date(now.setDate(diff));
+  return "attendance_"+monday.toISOString().split("T")[0];
+}
 
-// ----------------- MANUAL RESET -----------------
-function manualReset(){ if(confirm("Reset this week's attendance?")) saveToDatabase([],{}); }
-
-// ----------------- CLOCK -----------------
-function updateClock(){ let now=new Date(); timeNow.innerText=`Time: ${now.toLocaleTimeString()}`; }
-
-// ----------------- FIRESTORE -----------------
+/* ----------------- SAVE TO FIREBASE ----------------- */
 function saveToFirestore(){
   let data=[];
   [...tbody.rows].forEach(row=>{
@@ -348,30 +374,57 @@ function saveToFirestore(){
     for(let i=2;i<row.cells.length-1;i++) rowData.push(row.cells[i].textContent);
     data.push(rowData);
   });
-  saveToDatabase(data,tardyMinutesData);
+  saveToDatabase(data, tardyMinutesData);
 }
 
+/* ----------------- SYNC FROM FIREBASE ----------------- */
 function syncFirestore(){
-  listenToDatabase((data)=>{
+  listenToDatabase(data=>{
     if(!data) return;
-    let table=data.table||[]; tardyMinutesData=data.tardy||{};
+    let table=data.table||[];
+    tardyMinutesData=data.tardy||{};
     [...tbody.rows].forEach((row,r)=>{
       if(!table[r]) return;
       table[r].forEach((cell,c)=>{
         let td=row.cells[c+2];
         td.textContent=cell;
-        td.className=cell==="✔"?"P":cell==="T"?"T":cell==="C"?"C":cell==="A"?"A":cell==="E"?"E":"";
+        td.className=
+          cell==="✔"?"P":
+          cell==="T"?"T":
+          cell==="C"?"C":
+          cell==="A"?"A":
+          cell==="E"?"E":"";
       });
     });
     updateAllSummaries();
   });
 }
 
-// ----------------- INITIALIZE -----------------
-document.getElementById("dateDisplay").innerText="Date: "+getWeekKey().replace("attendance_","");
-loadTable();
+/* ----------------- WEEK SELECTION ----------------- */
+const weekSelect=document.getElementById("weekSelect");
+function loadWeekOptions(){
+  weekSelect.innerHTML="";
+  Object.keys(localStorage).filter(k=>k.includes("attendance")).forEach(k=>{
+    let opt=document.createElement("option");
+    opt.value=k; opt.textContent=k.replace("attendance_","Week of ");
+    weekSelect.appendChild(opt);
+  });
+  weekSelect.value=getWeekKey();
+  loadWeekData(weekSelect.value);
+}
+function loadWeekData(key){
+  syncFirestore();
+}
+weekSelect.addEventListener("change",()=>loadWeekData(weekSelect.value));
 loadWeekOptions();
-setInterval(updateClock,1000);
+
+/* ----------------- MANUAL RESET ----------------- */
+function manualReset(){
+  if(confirm("Reset this week's attendance?")) saveToDatabase([],{});
+}
+
+/* ----------------- CLOCK ----------------- */
+function updateClock(){ timeNow.innerText="Time: "+new Date().toLocaleTimeString(); }
 </script>
 </body>
 </html>
