@@ -347,8 +347,13 @@ document.addEventListener("input",function(e){
 function cycle(td,row){
   const states=["","✔","T","C","A","E"];
   let i=states.indexOf(td.textContent);
-  td.textContent=states[(i+1)%5];
-  td.className= td.textContent==="✔"?"P": td.textContent==="T"?"T": td.textContent==="C"?"C": td.textContent==="A"?"A":"";
+  td.textContent=states[(i+1)%states.length]; 
+  td.className=
+    td.textContent==="✔"?"P":
+    td.textContent==="T"?"T":
+    td.textContent==="C"?"C":
+    td.textContent==="A"?"A":
+    td.textContent==="E"?"E":"";
   updateRowSummary(row);
 }
 
@@ -395,9 +400,10 @@ function updateRowSummary(row){
     else if(val==="A") absent++;
     else if(val === "E") excused++;
   }
-  let name=row.cells[1].textContent;
+ let name=row.cells[1].textContent;
   let mins=tardyMinutesData[name]||0;
-  row.cells[row.cells.length-1].innerHTML=`✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent}`;
+  row.cells[row.cells.length-1].innerHTML=
+    `✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent} | E ${excused}`;
 }
 function updateAllSummaries(){ [...tbody.rows].forEach(row=>updateRowSummary(row)); }
 
