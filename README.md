@@ -11,11 +11,8 @@
 
   <!-- Firebase v12 -->
   <script type="module">
-   import { initializeApp } 
-from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
-
-import { getDatabase, ref, set, onValue } 
-from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBU5wgWTIgFetO38U28ikmoLC0CKryR05M",
@@ -30,25 +27,22 @@ from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    window.db = db;
-window.ref = ref;
-window.set = set;
-
     /* ----------------- WEEK KEY ----------------- */
-   function getWeekKey() {
-  let now = new Date();
-  let day = now.getDay();
-  let diff = now.getDate() - day + (day === 0 ? -6 : 1);
-  let monday = new Date(now);
-  monday.setDate(diff);
+    function getWeekKey() {
+      let now = new Date();
+      let day = now.getDay();
+      let diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      let monday = new Date(now.setDate(diff));
+      return "attendance_" + monday.toISOString().split("T")[0];
+    }
 
-  // Use LOCAL date instead of UTC
-  let year = monday.getFullYear();
-  let month = String(monday.getMonth() + 1).padStart(2, "0");
-  let date = String(monday.getDate()).padStart(2, "0");
-
-  return "attendance_" + `${year}-${month}-${date}`;
-}
+    /* ----------------- SAVE ----------------- */
+    window.saveToDatabase = function(data, tardy) {
+      set(ref(db, "attendance/" + getWeekKey()), {
+        table: data,
+        tardy: tardy
+      });
+    };
 
     /* ----------------- REALTIME LISTENER ----------------- */
     window.listenToDatabase = function(callback) {
@@ -432,16 +426,7 @@ function loadTable() {
     tr.innerHTML = `<td class="sticky">${i + 1}</td><td class="sticky name">${s}</td>`;
     for (let d = 0; d < 35; d++) {
       let td = document.createElement("td");
-      if (roleType !== "Student") td.onclick = () => { 
-  cycle(td, tr); 
-  saveStudentData(
-    tr.cells[1].textContent,
-    [...tr.cells]
-      .slice(2, tr.cells.length - 1)
-      .map(c => c.textContent)
-  );
-};
-
+      if (roleType !== "Student") td.onclick = () => { cycle(td, tr); saveToFirestore(); };
       tr.appendChild(td);
     }
     let summary = document.createElement("td");
@@ -510,12 +495,7 @@ function markPresent() {
   } else { td.textContent = "C"; td.className = "C"; }
 
   updateRowSummary(row);
-  saveStudentData(
-  loggedStudent,
-  [...row.cells]
-    .slice(2, row.cells.length - 1)
-    .map(c => c.textContent)
-);
+  saveToFirestore();
 }
 
 /* ----------------- SUMMARY ----------------- */
@@ -531,7 +511,7 @@ function updateRowSummary(row) {
   }
   let name = row.cells[1].textContent;
   let mins = tardyMinutesData[name] || 0;
-  row.cells[row.cells.length - 1].innerHTML = `✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent} | E ${excused}`;
+  row.cells[row.cells.length - 1].innerHTML = `✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent}`;
 }
 
 function updateAllSummaries() { [...tbody.rows].forEach(row => updateRowSummary(row)); }
@@ -543,55 +523,34 @@ function updateClock() {
 }
 
 /* ----------------- FIRESTORE SAVE & SYNC ----------------- */
-
-function saveStudentData(studentName, rowData) {
-  const studentIndex = students.indexOf(studentName);
-
-  const studentRef = ref(db, 
-    "attendance/" + getWeekKey() + "/table/" + studentIndex);
-
-  const tardyRef = ref(db, 
-    "attendance/" + getWeekKey() + "/tardy/" + studentName);
-
-  set(studentRef, rowData);
-  set(tardyRef, tardyMinutesData[studentName] || 0);
-}
-
-// Save the currently edited table (for admin/teacher full edits)
 function saveToFirestore() {
+  let data = [];
   [...tbody.rows].forEach(row => {
-    const studentName = row.cells[1].textContent;
     let rowData = [];
-    for (let i = 2; i < row.cells.length - 1; i++) {
-      rowData.push(row.cells[i].textContent);
-    }
-    saveStudentData(studentName, rowData);
+    for (let i = 2; i < row.cells.length - 1; i++) rowData.push(row.cells[i].textContent);
+    data.push(rowData);
   });
+  saveToDatabase(data, tardyMinutesData);
 }
 
-// Real-time listener to update table on all devices
 function syncFirestore() {
   listenToDatabase((data) => {
     if (!data) return;
-    const table = data.table || [];
+    let table = data.table || [];
     tardyMinutesData = data.tardy || {};
-
-    table.forEach((rowData, r) => {
-      const row = tbody.rows[r];
-      if (!row || !rowData) return;
-
-      rowData.forEach((cellValue, c) => {
-        const td = row.cells[c + 2];
-        td.textContent = cellValue;
+    [...tbody.rows].forEach((row, r) => {
+      if (!table[r]) return;
+      table[r].forEach((cell, c) => {
+        let td = row.cells[c + 2];
+        td.textContent = cell;
         td.className =
-          cellValue === "✔" ? "P" :
-          cellValue === "T" ? "T" :
-          cellValue === "C" ? "C" :
-          cellValue === "A" ? "A" :
-          cellValue === "E" ? "E" : "";
+          cell === "✔" ? "P" :
+          cell === "T" ? "T" :
+          cell === "C" ? "C" :
+          cell === "A" ? "A" :
+          cell === "E" ? "E" : "";
       });
     });
-
     updateAllSummaries();
   });
 }
