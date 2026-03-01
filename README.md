@@ -30,6 +30,10 @@ from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
+    window.db = db;
+window.ref = ref;
+window.set = set;
+
     /* ----------------- WEEK KEY ----------------- */
     function getWeekKey() {
       let now = new Date();
