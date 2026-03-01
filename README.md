@@ -9,7 +9,7 @@
 <!-- QR Scanner library -->
 <script src="https://unpkg.com/html5-qrcode"></script>
 
-<!-- Firebase -->
+<!-- Firebase v12 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
 import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
@@ -27,12 +27,26 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+/* ----------------- WEEK KEY ----------------- */
+function getWeekKey(){
+  let now=new Date();
+  let day=now.getDay();
+  let diff=now.getDate()-day+(day===0?-6:1);
+  let monday=new Date(now.setDate(diff));
+  return "attendance_"+monday.toISOString().split("T")[0];
+}
+
+/* ----------------- SAVE ----------------- */
 window.saveToDatabase = function(data, tardy){
-  set(ref(db, "attendance/"+getWeekKey()), { table: data, tardy: tardy });
+  set(ref(db, "attendance/"+getWeekKey()), {
+    table: data,
+    tardy: tardy
+  });
 };
 
+/* ----------------- REALTIME LISTENER ----------------- */
 window.listenToDatabase = function(callback){
-  onValue(ref(db, "attendance/"+getWeekKey()), snapshot=>{
+  onValue(ref(db, "attendance/"+getWeekKey()), (snapshot)=>{
     if(snapshot.exists()){
       callback(snapshot.val());
     }
@@ -73,14 +87,12 @@ th{background:#eee;font-weight:600}
 .day-head{background:var(--maroon);color:white;border-right:4px solid black}
 .sticky{position:sticky;left:0;background:white;z-index:4;font-weight:600}
 .name{left:42px;z-index:5;background:white}
-.summary-col{background:#f7f7f7;min-width:160px;font-weight:600}
-
-/* MARK COLORS */
+.summary-col{background:#f7f7f7;min-width:180px;font-weight:600}
 .P{background:#c8f7c5;font-weight:600}
 .T{background:#fff3b0;font-weight:600}
 .C{background:#ffb3b3;font-weight:600}
 .A{background:#e0e0e0;font-weight:600}
-.E{background:#a0c4ff;font-weight:600} /* Excused */
+.E{background:#b3d9ff;font-weight:600}
 
 /* QR Interface */
 #qrAuthInterface{display:none;padding:20px;text-align:center}
@@ -185,22 +197,10 @@ let roleType="", loggedStudent="", tardyMinutesData={}, html5QrCode;
 const studentQRCodes={};
 students.forEach((s,i)=>studentQRCodes[s]="QR"+String(i+1).padStart(3,"0"));
 
-/* ----------------- WEEK RANGE ----------------- */
-function getWeekRange(){
-  let now=new Date();
-  let day=now.getDay();
-  let diff=now.getDate()-day+(day===0?-6:1);
-  let monday=new Date(now.setDate(diff));
-  let friday=new Date(monday); friday.setDate(monday.getDate()+4);
-  let opt={month:"short",day:"numeric"};
-  return `${monday.toLocaleDateString("en-US",opt)} - ${friday.toLocaleDateString("en-US",opt)}, ${friday.getFullYear()}`;
-}
-document.getElementById("dateDisplay").innerText="Date: "+getWeekRange();
-
 /* ----------------- SUBJECT ROW ----------------- */
 const subjectRow=document.getElementById("subjectRow");
 subjectRow.innerHTML="";
-for(let d=0;d<5;d++) subs.forEach(s=>subjectRow.innerHTML=`<th>${s[0]}<div style="font-size:9px">${s[1]}</div></th>`);
+for(let d=0;d<5;d++) subs.forEach(s=>subjectRow.innerHTML+=`<th>${s[0]}<div style="font-size:9px">${s[1]}</div></th>`);
 
 /* ----------------- LOGIN ----------------- */
 role.onchange=()=>adminPass.style.display=role.value==="Student"?"none":"block";
@@ -221,81 +221,9 @@ function loginUser(){
   }
 }
 
-/* ----------------- QR SCANNER ----------------- */
-function startQRScanner(){
-  const status = document.getElementById("qrStatus");
-  status.style.color = "black"; status.textContent = "Accessing camera...";
-  if(html5QrCode){ html5QrCode.stop().then(()=>{}).catch(()=>{}); }
-  html5QrCode = new Html5Qrcode("qrVideo");
-  const config = { fps: 10, qrbox: 250 };
-  Html5Qrcode.getCameras().then(devices=>{
-    if(!devices || devices.length===0){ status.style.color="red"; status.textContent="No camera found!"; return; }
-    let cameraId = devices.find(d=>d.label.toLowerCase().includes("back"))?.id || devices[0].id;
-    html5QrCode.start(cameraId, config,
-      decodedText=>{
-        if(decodedText===studentQRCodes[loggedStudent]){
-          html5QrCode.stop().then(()=>{
-            status.style.color="green";
-            status.textContent="QR Verified! Loading attendance...";
-            setTimeout(()=>{
-              qrAuthInterface.style.display="none";
-              main.style.display="block";
-              studentAction.style.display="block";
-              loadTable();
-              setInterval(updateClock,1000);
-              syncFirestore();
-            },500);
-          });
-        } else { status.style.color="red"; status.textContent="Invalid QR code"; }
-      },
-      err=>{}
-    ).catch(err=>{status.style.color="red"; status.textContent="Camera access denied or not available";});
-  }).catch(err=>{status.style.color="red"; status.textContent="Unable to access cameras";});
-}
-
-function cancelQR(){ if(html5QrCode){ html5QrCode.stop().then(()=>{}).catch(()=>{}); } qrAuthInterface.style.display="none"; login.style.display="block"; }
-
-/* ----------------- AUTO LOGOUT ----------------- */
-let logoutTimer;
-function resetLogoutTimer(){ clearTimeout(logoutTimer); logoutTimer=setTimeout(()=>{ alert("Session expired."); location.reload(); },600000); }
-document.addEventListener("click",resetLogoutTimer); document.addEventListener("keypress",resetLogoutTimer);
-
-/* ----------------- TABLE FUNCTIONS ----------------- */
-const tbody=document.getElementById("tbody");
-
-  /* ----------------- LOAD TABLE ----------------- */
-function loadTable(){
-  tbody.innerHTML="";
-  students.forEach((s,i)=>{
-    let tr=document.createElement("tr");
-    tr.innerHTML=`<td class="sticky">${i+1}</td><td class="sticky name">${s}</td>`;
-    for(let d=0;d<35;d++){
-      let td=document.createElement("td");
-      if(roleType!=="Student"){
-        td.onclick=()=>{ cycle(td,tr); saveToFirestore(); updateRowSummary(tr); };
-      }
-      tr.appendChild(td);
-    }
-    let summary=document.createElement("td");
-    summary.className="summary-col";
-    tr.appendChild(summary);
-    tbody.appendChild(tr);
-  });
-  updateAllSummaries();
-}
-
-/* ----------------- SEARCH ----------------- */
-document.getElementById("searchInput").addEventListener("input",e=>{
-  let val=e.target.value.toLowerCase();
-  [...tbody.rows].forEach(row=>{
-    let name=row.cells[1].textContent.toLowerCase();
-    row.style.display=name.includes(val)?"":"none";
-  });
-});
-
 /* ----------------- CYCLE MARKS ----------------- */
 function cycle(td,row){
-  const states=["","✔","T","C","A","E"]; // E = Excused
+  const states=["","✔","T","C","A","E"]; // Added E = Excused
   let i=states.indexOf(td.textContent);
   td.textContent=states[(i+1)%states.length];
   td.className=
@@ -304,7 +232,26 @@ function cycle(td,row){
     td.textContent==="C"?"C":
     td.textContent==="A"?"A":
     td.textContent==="E"?"E":"";
+  updateRowSummary(row);
 }
+
+/* ----------------- SUMMARY ----------------- */
+function updateRowSummary(row){
+  let present=0, tardy=0, cutting=0, absent=0, excused=0;
+  for(let i=2;i<row.cells.length-1;i++){
+    let val=row.cells[i].textContent;
+    if(val==="✔") present++;
+    else if(val==="T") tardy++;
+    else if(val==="C") cutting++;
+    else if(val==="A") absent++;
+    else if(val==="E") excused++;
+  }
+  let name=row.cells[1].textContent;
+  let mins=tardyMinutesData[name]||0;
+  row.cells[row.cells.length-1].innerHTML=
+    `✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent} | E ${excused}`;
+}
+function updateAllSummaries(){ [...tbody.rows].forEach(row=>updateRowSummary(row)); }
 
 /* ----------------- MARK PRESENT (STUDENT) ----------------- */
 function markPresent(){
@@ -334,39 +281,11 @@ function markPresent(){
   else if(diff<=60){ td.textContent="T"; td.className="T"; if(!tardyMinutesData[loggedStudent]) tardyMinutesData[loggedStudent]=0; tardyMinutesData[loggedStudent]+=diff; }
   else{ td.textContent="C"; td.className="C"; }
 
-  saveToFirestore();
   updateRowSummary(row);
+  saveToFirestore();
 }
 
-/* ----------------- SUMMARY ----------------- */
-function updateRowSummary(row){
-  let present=0, tardy=0, cutting=0, absent=0, excused=0;
-  for(let i=2;i<row.cells.length-1;i++){
-    let val=row.cells[i].textContent;
-    if(val==="✔") present++;
-    else if(val==="T") tardy++;
-    else if(val==="C") cutting++;
-    else if(val==="A") absent++;
-    else if(val==="E") excused++;
-  }
-  let name=row.cells[1].textContent;
-  let mins=tardyMinutesData[name]||0;
-  row.cells[row.cells.length-1].innerHTML=
-    `✔ ${present} | T ${tardy} (${mins}m) | C ${cutting} | A ${absent} | E ${excused}`;
-}
-
-function updateAllSummaries(){ [...tbody.rows].forEach(row=>updateRowSummary(row)); }
-
-/* ----------------- WEEK KEY ----------------- */
-function getWeekKey(){
-  let now=new Date();
-  let day=now.getDay();
-  let diff=now.getDate()-day+(day===0?-6:1); // Monday
-  let monday=new Date(now.setDate(diff));
-  return "attendance_"+monday.toISOString().split("T")[0];
-}
-
-/* ----------------- SAVE TO FIREBASE ----------------- */
+/* ----------------- FIRESTORE SAVE & SYNC ----------------- */
 function saveToFirestore(){
   let data=[];
   [...tbody.rows].forEach(row=>{
@@ -377,9 +296,8 @@ function saveToFirestore(){
   saveToDatabase(data, tardyMinutesData);
 }
 
-/* ----------------- SYNC FROM FIREBASE ----------------- */
 function syncFirestore(){
-  listenToDatabase(data=>{
+  listenToDatabase((data)=>{
     if(!data) return;
     let table=data.table||[];
     tardyMinutesData=data.tardy||{};
@@ -399,32 +317,6 @@ function syncFirestore(){
     updateAllSummaries();
   });
 }
-
-/* ----------------- WEEK SELECTION ----------------- */
-const weekSelect=document.getElementById("weekSelect");
-function loadWeekOptions(){
-  weekSelect.innerHTML="";
-  Object.keys(localStorage).filter(k=>k.includes("attendance")).forEach(k=>{
-    let opt=document.createElement("option");
-    opt.value=k; opt.textContent=k.replace("attendance_","Week of ");
-    weekSelect.appendChild(opt);
-  });
-  weekSelect.value=getWeekKey();
-  loadWeekData(weekSelect.value);
-}
-function loadWeekData(key){
-  syncFirestore();
-}
-weekSelect.addEventListener("change",()=>loadWeekData(weekSelect.value));
-loadWeekOptions();
-
-/* ----------------- MANUAL RESET ----------------- */
-function manualReset(){
-  if(confirm("Reset this week's attendance?")) saveToDatabase([],{});
-}
-
-/* ----------------- CLOCK ----------------- */
-function updateClock(){ timeNow.innerText="Time: "+new Date().toLocaleTimeString(); }
 </script>
 </body>
 </html>
