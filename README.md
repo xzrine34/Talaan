@@ -11,7 +11,10 @@
 
   <!-- Firebase v12 -->
   <script type="module">
-   import { getDatabase, ref, set, onValue } 
+   import { initializeApp } 
+from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+
+import { getDatabase, ref, set, onValue } 
 from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 
     const firebaseConfig = {
