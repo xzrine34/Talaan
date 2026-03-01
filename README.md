@@ -35,14 +35,20 @@ window.ref = ref;
 window.set = set;
 
     /* ----------------- WEEK KEY ----------------- */
-    function getWeekKey() {
-      let now = new Date();
-      let day = now.getDay();
-      let diff = now.getDate() - day + (day === 0 ? -6 : 1);
-      let monday = new Date(now.setDate(diff));
-      return "attendance_" + monday.toISOString().split("T")[0];
-    }
-    ;
+   function getWeekKey() {
+  let now = new Date();
+  let day = now.getDay();
+  let diff = now.getDate() - day + (day === 0 ? -6 : 1);
+  let monday = new Date(now);
+  monday.setDate(diff);
+
+  // Use LOCAL date instead of UTC
+  let year = monday.getFullYear();
+  let month = String(monday.getMonth() + 1).padStart(2, "0");
+  let date = String(monday.getDate()).padStart(2, "0");
+
+  return "attendance_" + `${year}-${month}-${date}`;
+}
 
     /* ----------------- REALTIME LISTENER ----------------- */
     window.listenToDatabase = function(callback) {
